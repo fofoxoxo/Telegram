@@ -5,6 +5,9 @@ on:
   push:
     branches: [dev]
 
+env:
+  PKG: com.nova.tgclient
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -37,11 +40,20 @@ jobs:
           F=TMessagesProj/src/main/java/org/telegram/messenger/BuildVars.java
           sed -i -E 's|APP_ID = [0-9]+;|APP_ID = ${{ secrets.TG_API_ID }};|' $F
           sed -i -E 's|APP_HASH = "[^"]*";|APP_HASH = "${{ secrets.TG_API_HASH }}";|' $F
-          grep -nE 'APP_ID|APP_HASH' $F
+          grep -nE 'APP_ID|APP_HASH' $F | sed -E 's/"[^"]{6,}"/"***"/'
 
-      - name: Add google-services.json
+      - name: Change package name
         run: |
-          echo "${{ secrets.GOOGLE_SERVICES_B64 }}" | base64 -d > TMessagesProj_App/google-services.json
+          for f in $(grep -rl 'org.telegram.messenger"' --include=build.gradle .); do
+            sed -i "s|applicationId = \"org.telegram.messenger\"|applicationId = \"$PKG\"|" $f
+          done
+          grep -rn "applicationId" --include=build.gradle .
+
+      - name: Remove Google services and Crashlytics plugins
+        run: |
+          for f in $(find . -name build.gradle); do
+            sed -i -E "/com\.google\.gms/d; /apply plugin: 'com\.google\.firebase/d; /firebase-crashlytics-gradle/d" $f
+          done
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
